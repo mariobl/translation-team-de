@@ -16,13 +16,13 @@ function test_Message_format()
   local msg = po.Message:new(13)
   msg.msgid = ""
 
-  u.assertEquals(msg:format(), "msgid \"\"\n")
+  u.assertEquals(msg:tostring(), "msgid \"\"\n")
 
   table.insert(msg.comments, "#,fuzzy")
   msg.msgid = "hello\"\n"
   msg.msgstr = "hallo\"\n"
 
-  u.assertEquals(msg:format(), [[
+  u.assertEquals(msg:tostring(), [[
 #,fuzzy
 msgid "hello\"\n"
 msgstr "hallo\"\n"

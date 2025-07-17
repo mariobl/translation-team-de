@@ -4,7 +4,7 @@ function extract_gcc_internal_percent(str)
   local percents = ""
   local s = str
   while s ~= "" do
-    local _, _, prefix = s:find("^(%%[#.lqz0-9]*[<>{}CDEFHILRTXZderstuvx])")
+    local _, _, prefix = s:find("^(%%[#.lqz0-9]*[<>{}CDEFHILRSTXZderstuvx])")
     if prefix then
       percents = percents .. prefix
       s = s:sub(1 + #prefix)
@@ -42,6 +42,11 @@ function proofread(msg, msgid, msgstr)
   if msgstr == "" or msgstr == msgid or msg.fuzzy then
     return
   end
+  -- TODO: Options inside quotes are fine.
+  for option in msgid:gmatch(" (%-[A-Za-z]+[=][A-Za-z0-9%-]+)") do
+    warn(msg, ("Option »%s«"):format(option))
+  end
+  -- TODO: %<...%> ohne exakte Übersetzung
   if msgid:find("^[Uu]sage:") and not msgstr:find("^Aufruf:") then
     warn(msg, "»usage« sollte mit »Aufruf« übersetzt werden.", "^%a+")
   end
@@ -51,11 +56,17 @@ function proofread(msg, msgid, msgstr)
   if msgid:find("%s$") and not msgstr:find("%s$") then
     warn(msg, "Da im englischen Text Leerzeichen am Zeilenende sind, sollte das im deutschen Text auch so sein.")
   end
+  if msgid:find("link") and not msgstr:find("[Bb][iu]nd") then
+    warn(msg, "»link« sollte als »Bindung« übersetzt werden.")
+  end
   if msgid:find("seek") and msgstr:find("[Ss]uch") and not msgstr:find("[Ss]pr[iu]ng") and not msgstr:find("[Ss]eek") then
     warn(msg,
       "»seek« sollte mit »springen/gesprungen« übersetzt werden. " ..
       "(Nicht mit »suchen«, da das zu viele andere Bedeutungen hat.)",
       "[Ss]uch%a*")
+  end
+  if msgstr:find("%%[<>]") and not msgid:find("%%[<>]") and not msg.gcc_internal_format then
+    warn(msg, "»%<« in String ohne gcc-internal-format.")
   end
   if msgstr:find("\"") then
     warn(msg,
@@ -66,10 +77,10 @@ function proofread(msg, msgid, msgstr)
     if false and corrected ~= msgstr and promptCorrect() then
     end
   end
-  if msgstr:find("%f[%l]the%f[%L]") then
+  if msgstr:find("%f[%l]the%f[%L]") and msgid ~= "" then
     warn(msg, "»the« gefunden – möglicherweise nicht vollständig übersetzt.")
   end
-  if not msg.gcc_internal_format and not msg.c_format then
+  if not msg.gcc_internal_format and not msg.c_format and not msg.no_c_format then
     local msgid_percent = extract_gcc_internal_percent(msgid)
     local msgstr_percent = extract_gcc_internal_percent(msgstr)
     if msgid_percent ~= msgstr_percent then

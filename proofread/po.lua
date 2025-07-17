@@ -102,7 +102,7 @@ function Message:new(file, id)
   }, Message)
 end
 
-function Message:format()
+function Message:tostring()
   local s = ""
 
   for _, comment in ipairs(self.comments) do
@@ -156,17 +156,23 @@ function File:parse(input)
     error("invalid input type")
   end
 
+  local function parseOptions(msg, line)
+    msg.options = msg.options or {}
+    for option in line:gmatch("[a-z%-]+") do
+      msg.options[option] = true
+    end
+    msg.c_format = msg.options["c-format"]
+    msg.fuzzy = msg.options["fuzzy"]
+    msg.gcc_internal_format = msg.options["gcc-internal-format"]
+    msg.gfc_internal_format = msg.options["gfc-internal-format"]
+    msg.no_c_format = msg.options["no-c-format"]
+  end
+
   local function parseLine(msg, line)
     if line:find("^#") then
       table.insert(msg.comments, line)
-      if line:find("^#,.*fuzzy") then
-        msg.fuzzy = true
-      end
-      if line:find("^#,.*gcc-internal-format") then
-        msg.gcc_internal_format = true
-      end
-      if line:find("^#,.*c-format") then
-        msg.c_format = true
+      if line:find("^#,") then
+        parseOptions(msg, line)
       end
       return
     end
@@ -209,7 +215,7 @@ function File:write(filename)
   local separator = ""
   for _, message in ipairs(self.messages) do
     f:write(separator)
-    f:write(message:format())
+    f:write(message:tostring())
     separator = "\n"
   end
   f:close()
