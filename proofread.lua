@@ -100,12 +100,33 @@ local function check_option_unquoted(msg)
   end
 end
 
+--- @param msg PoMessage
+local function check_quoted_portions(msg)
+  local pattern = msg.gcc_internal_format and "%%<(.-)%%>" or "»(.-)«"
+  msg.msgid:gsub(pattern, function(quoted)
+    --print("msgid quoted", quoted)
+    if not msg.msgstr:find(quoted, 1, true) then
+      warn(msg, ("Das Original enthält %q, die Übersetzung jedoch nicht."):format(quoted), nil)
+    end
+    return nil
+  end)
+  msg.msgstr:gsub(pattern, function(quoted)
+    --print("msgstr quoted", quoted)
+    if not msg.msgid:find(quoted:gsub("…$", ""), 1, true) then
+      warn(msg, ("Die Übersetzung enthält %q, das Original jedoch nicht."):format(quoted), nil)
+    end
+    return nil
+  end)
+end
+
 function proofread(msg, msgid, msgstr)
   if msgstr == "" or msgstr == msgid or msg.fuzzy then
     return
   end
   check_option_unquoted(msg)
-  -- TODO: %<...%> ohne exakte Übersetzung
+  check_quoted_portions(msg)
+  if true then return end
+
   -- TODO: option -> Option/Schalter
   -- TODO: stattdessen -> verwenden Sie stattdessen ...
   -- TODO: Verwendung mit Schalter -> mit der
@@ -176,7 +197,7 @@ end
 --- @param redpattern string | nil
 function warn(msg, warning, redpattern)
   local function fmtmsg(s)
-    return "\"" .. s:gsub("\\n(.)", "\\n\"\n\"%1") .. "\""
+    return "\"" .. s:gsub("\"", "\\\""):gsub("\\n(.)", "\\n\"\n\"%1") .. "\""
   end
 
   print(color(32) .. "file: " .. msg.file .. color(0))
