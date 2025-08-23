@@ -134,7 +134,7 @@ local function check_quoted_in_msgid(msg, quoted)
   if msg.msgstr:find("delete%-Operator") and quoted == "operator delete" then
     return
   end
-  warn(msg, ("Das Original enthält %q, die Übersetzung jedoch nicht."):format(quoted), nil)
+  warn(msg, ("Das Original enthält %q, die Übersetzung jedoch nicht."):format(quoted))
 end
 
 --- @param msg PoMessage
@@ -325,7 +325,7 @@ local function check_quoted_in_msgstr(msg, quoted)
   if msg.msgid:find("Use std=f202y") and quoted == "-std=f202y" then
     return
   end
-  warn(msg, ("Die Übersetzung enthält %q, das Original jedoch nicht."):format(quoted), nil)
+  warn(msg, ("Die Übersetzung enthält %q, das Original jedoch nicht."):format(quoted))
 end
 
 --- @param msg PoMessage
@@ -492,7 +492,7 @@ function markred(s, redpattern)
 end
 
 --- @param msg PoMessage
---- @param redpattern string | nil
+--- @param redpattern? string
 function warn(msg, warning, redpattern)
   local function fmtmsg(s)
     return "\"" .. s:gsub("\"", "\\\""):gsub("\\n(.)", "\\n\"\n\"%1") .. "\""
