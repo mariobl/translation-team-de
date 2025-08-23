@@ -75,7 +75,7 @@ end
 --- @param msg PoMessage
 --- @param s string
 --- @return string
-local function gcc_internal_format_without_quoted_parts(msg, s)
+local function without_quoted_parts(msg, s)
   if msg.gcc_internal_format then
     return (s:gsub("%%<.-%%>", "X"))
   end
@@ -103,7 +103,7 @@ local function check_option_unquoted(msg)
     or msg.msgid == "Abbreviation for \"-g -fno-eliminate-unused-debug-symbols\"." then
     return
   end
-  local without_quotes = gcc_internal_format_without_quoted_parts(msg, msg.msgstr)
+  local without_quotes = without_quoted_parts(msg, msg.msgstr)
   --- @param option string
   for option in without_quotes:gmatch(" (%-[%-0-9A-Z_a-z]+=?[+%-0-9:A-Z_a-z]*)") do
     if not option:match("^%-[0-9]+$")
@@ -325,6 +325,9 @@ local function check_quoted_in_msgstr(msg, quoted)
   if msg.msgid:find("Use std=f202y") and quoted == "-std=f202y" then
     return
   end
+  if msg.msgid == "Warn when deleting a pointer to incomplete type." and quoted == "delete" then
+    return
+  end
   warn(msg, ("Die Übersetzung enthält %q, das Original jedoch nicht."):format(quoted))
 end
 
@@ -357,7 +360,7 @@ local function check_quoted_portions(msg)
           qs = i
         end
       end
-     -- print('id', id, 'str', str, 'qi', qi, 'qs', qs)
+      -- print('id', id, 'str', str, 'qi', qi, 'qs', qs)
       if qi and qs then
         table.remove(qid, qi)
         table.remove(qstr, qs)
@@ -411,20 +414,35 @@ local function check_quoted_portions(msg)
   end
 end
 
+--- @param msgid string
+--- @param msgstr string
 function proofread(msg, msgid, msgstr)
   if msgstr == "" or msgstr == msgid or msg.fuzzy then
     return
   end
-  check_option_unquoted(msg)
-  check_quoted_portions(msg)
-  if true then
+  if msgstr:find("^Interner Fehler: ") and msgstr:gsub("^%S+ %S+: ", "") == msgid then
     return
   end
+  if msgstr:find("^Interner Compilerfehler: ") and msgstr:gsub("^%S+ %S+: ", "") == msgid then
+    return
+  end
+  check_option_unquoted(msg)
+  check_quoted_portions(msg)
+
+  local msgid_orig = msgid
+  local msgstr_orig = msgstr
+  msgid = without_quoted_parts(msg, msgid)
+  msgstr = without_quoted_parts(msg, msgstr)
 
   -- TODO: option -> Option/Schalter
   -- TODO: stattdessen -> verwenden Sie stattdessen ...
-  if msgstr:find("mit Schalter") or msgstr:find("mit dem Schalter") then
+  if (msgstr:find("mit Schalter") or msgstr:find("mit dem Schalter"))
+    and msgid:find("option")
+    and msgid ~= "switch X conflicts with X switch and resulted in options %qs being added" then
     warn(msg, "»Schalter« sollte als »Option« übersetzt werden.")
+  end
+  if msgid:find("entit[yi]") and not msgstr:find("[Ee]ntität") and not msgstr:find("entity%-list") then
+    warn(msg, "»entity« sollte als »Entität« übersetzt werden.")
   end
   if msgid:find("^[Uu]sage:") and not msgstr:find("^Aufruf:") then
     warn(msg, "»usage« sollte mit »Aufruf« übersetzt werden.", "^%a+")
@@ -436,7 +454,14 @@ function proofread(msg, msgid, msgstr)
     and msgid ~= "Negation of unsigned expression at %L not permitted " then
     warn(msg, "Da im englischen Text Leerzeichen am Zeilenende sind, sollte das im deutschen Text auch so sein.")
   end
-  if msgid:find("link") and not msgstr:find("[Bb][iu]nd") then
+  if msgid:find("link") and not msgstr:find("[Bb][iu]nd")
+    and msgid ~= "-fuse-linker-plugin is not supported in this configuration"
+    and not msgid:find("Produce a Mach%-O dylinker")
+    and not msgid:find("%-dylinker_install_name")
+    and not msgid:find("%-multiply_defined_unused")
+    and not msgid:find("minterlink%-compressed")
+    and msgid ~= "argument of %qE attribute is not \"ilink1\" or \"ilink2\""
+    and msgid ~= "argument of %qE attribute is not \"ilink\" or \"firq\"" then
     warn(msg, "»link« sollte als »Bindung« übersetzt werden.")
   end
   if msgid:find("seek") and msgstr:find("[Ss]uch") and not msgstr:find("[Ss]pr[iu]ng") and not msgstr:find("[Ss]eek") then
@@ -448,7 +473,14 @@ function proofread(msg, msgid, msgstr)
   if msgstr:find("%%[<>]") and not msgid:find("%%[<>]") and not msg.gcc_internal_format then
     warn(msg, "»%<« in String ohne gcc-internal-format.")
   end
-  if msgstr:find("\"") then
+  if msgstr:find("\"")
+    and msgid ~= "Warn about deprecated space between \"\" and suffix in a user-defined literal operator."
+    and msgid ~= "Implement DIP1000: Scoped pointers."
+    and msgid ~= "Implement DIP1008: Allow exceptions in @nogc code."
+    and msgid ~= "Implement DIP1021: Mutable function arguments."
+    and msgid ~= "Revert DIP1000: Scoped pointers."
+    and msgid ~= "%qE attribute applied to extern \"C\" declaration %qD"
+  then
     warn(msg,
       "Im deutschen Text sollten keine \"geraden\", " ..
         "sondern „diese“ oder »jene« Anführungszeichen benutzt werden.",
@@ -459,15 +491,16 @@ function proofread(msg, msgid, msgstr)
     warn(msg, "»the« gefunden – möglicherweise nicht vollständig übersetzt.")
   end
   if not msg.gcc_internal_format and not msg.c_format and not msg.no_c_format then
-    local msgid_percent = extract_gcc_internal_percent(msgid)
-    local msgstr_percent = extract_gcc_internal_percent(msgstr)
+    local msgid_percent = extract_gcc_internal_percent(msgid_orig)
+    local msgstr_percent = extract_gcc_internal_percent(msgstr_orig)
     if msgid_percent ~= msgstr_percent then
+      print(msgid_percent, msgstr_percent)
       warn(msg, ("Prozent in unformatiert '%s' '%s'"):format(msgid_percent, msgstr_percent))
     end
   end
   if msg.c_format then
-    local msgid_fmt = msgid:find("%%[0-9]*[$]*[sdf]")
-    local msgstr_fmt = msgstr:find("%%[0-9]*[$]*[sdf]")
+    local msgid_fmt = msgid:find("%%[0-9]*[$]+[sdf]")
+    local msgstr_fmt = msgstr:find("%%[0-9]*[$]+[sdf]")
     if not msgid_fmt ~= not msgstr_fmt then
       warn(msg, "Prozent mit Positionsangabe")
     end
